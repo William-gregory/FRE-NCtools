@@ -30,6 +30,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <math.h>
+#include <limits.h>
 #include "constant.h"
 #include "mpp.h"
 #include "mpp_io.h"
@@ -141,6 +142,7 @@ int main(int argc, char* argv[])
   char    *output_mosaic=NULL;           /* output mosaic file name */
   char    *output_topog=NULL;
   double  sea_level = 0;
+  size_t  maxxgrid = 0;
   char    history[MAXATT];
   char    default_output_file[] = "runoff.nc";
   char    default_fld_name[]    = "runoff";
@@ -158,6 +160,7 @@ int main(int argc, char* argv[])
     {"output_file",       required_argument, NULL, 'e'},
     {"output_fld_name",   required_argument, NULL, 'f'},
     {"sea_level",         required_argument, NULL, 'g'},
+    {"maxxgrid",          required_argument, NULL, 'i'},
     {"help",              no_argument,       NULL, 'h'},
     {0, 0, 0, 0},
   };
@@ -188,6 +191,9 @@ int main(int argc, char* argv[])
     case 'g':
       sea_level= atof(optarg);
       break;
+    case 'i':
+      maxxgrid = strtoull(optarg, NULL, 10);
+      break;
     case '?':
       errflg++;
       break;
@@ -206,6 +212,11 @@ int main(int argc, char* argv[])
   if(!output_topog) mpp_error("runoff_regrid: output_topog is not specified");
   if(!output_file) output_file = default_output_file;
   if(!output_fld_name) output_fld_name = default_fld_name;
+  /* get_maxxgrid() narrows to a 32-bit int, so cap the runtime limit below INT_MAX */
+  if(maxxgrid > 0) {
+    if(maxxgrid > (size_t)INT_MAX) mpp_error("runoff_regrid: --maxxgrid value exceeds INT_MAX");
+    set_maxxgrid(maxxgrid);
+  }
 
   /* define history to be the history in the grid file */
   strcpy(history,argv[0]);
@@ -601,7 +612,7 @@ void process_data(const char *infile, const char *fld_name_in, const char *outfi
     mpp_copy_var_att(fid_in, id_time_in, fid_out, id_time);
   }
 
-  id_fld = mpp_def_var(fid_out, fld_name_out, NC_DOUBLE, ndim, dims, 0);
+  id_fld = mpp_def_var(fid_out, fld_name_out, mpp_get_var_type(fid_in, vid_in), ndim, dims, 0);
   mpp_copy_var_att(fid_in, vid_in, fid_out, id_fld);
   mpp_end_def(fid_out);
 
